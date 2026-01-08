@@ -321,6 +321,9 @@ var CliClientOpenCommand = cli.Command{
 		if shouldUsePorts {
 			tunnelInfo.SwitchToPorts(localPortNumber, remotePortNumber)
 		}
+		if nvrhContext.DirectIp != "" {
+			tunnelInfo.SwitchToDirect(nvrhContext.DirectIp, remotePortNumber)
+		}
 
 		// Start remote nvim
 		go func() {
