@@ -16,6 +16,8 @@ import (
 	"strings"
 	"time"
 
+	"golang.org/x/term"
+
 	"github.com/neovim/go-client/nvim"
 	"github.com/urfave/cli/v3"
 
@@ -109,6 +111,12 @@ var CliClientOpenCommand = cli.Command{
 			Sources: cli.EnvVars("NVRH_CLIENT_AUTOMAP_PORTS"),
 			Value:   true,
 		},
+
+		&cli.StringFlag{
+			Name:    "direct-ip",
+			Usage:   "IP address to use instead of port forwarding. Useful for servers on the same network or with a VPN [$NVRH_CLIENT_DIRECT_IP]",
+			Sources: cli.EnvVars("NVRH_CLIENT_DIRECT_IP"),
+		},
 	},
 
 	Action: func(ctx context.Context, cmd *cli.Command) error {
@@ -116,6 +124,9 @@ var CliClientOpenCommand = cli.Command{
 		if err != nil {
 			return err
 		}
+
+		termState, err := term.GetState(int(os.Stdin.Fd()))
+		defer term.Restore(int(os.Stdin.Fd()), termState)
 
 		isDebug := cmd.Bool("debug")
 		logger.PrepareLogger(isDebug)
@@ -156,6 +167,8 @@ var CliClientOpenCommand = cli.Command{
 			TunneledPorts: make(map[string]bool),
 
 			NvimCmd: cmd.StringSlice("nvim-cmd"),
+
+			DirectIp: cmd.String("direct-ip"),
 		}
 
 		remoteEnv := cmd.StringSlice("server-env")
@@ -195,11 +208,15 @@ var CliClientOpenCommand = cli.Command{
 
 		siDone := make(chan error, 1)
 
-		siTunnelInfo := &ssh_tunnel_info.SshTunnelInfo{
+		var siTunnelInfo *ssh_tunnel_info.SshTunnelInfo
+		siTunnelInfo = &ssh_tunnel_info.SshTunnelInfo{
 			Mode:         "port",
 			Public:       false,
 			LocalSocket:  fmt.Sprintf("%d", randomPort),
 			RemoteSocket: fmt.Sprintf("%d", randomPort),
+		}
+		if nvrhContext.DirectIp != "" {
+			siTunnelInfo.SwitchToDirect(nvrhContext.DirectIp, randomPort)
 		}
 
 		// Start server info nvim instance.
@@ -246,6 +263,9 @@ var CliClientOpenCommand = cli.Command{
 					LocalSocket:  fmt.Sprintf("%d", localPortNumber),
 					RemoteSocket: fmt.Sprintf("%d", remotePortNumber),
 					Public:       false,
+				}
+				if nvrhContext.DirectIp != "" {
+					tunnelInfo.SwitchToDirect(nvrhContext.DirectIp, remotePortNumber)
 				}
 
 				nvimCmd := nvim_helpers.BuildRemoteCommandString(
@@ -526,6 +546,9 @@ var CliClientReconnectCommand = cli.Command{
 
 		if shouldUsePorts {
 			tunnelInfo.SwitchToPorts(localPortNumber, remotePortNumber)
+		}
+		if nvrhContext.DirectIp != "" {
+			tunnelInfo.SwitchToDirect(nvrhContext.DirectIp, remotePortNumber)
 		}
 
 		go func() {

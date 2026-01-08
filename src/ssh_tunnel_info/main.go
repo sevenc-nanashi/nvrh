@@ -5,13 +5,17 @@ import (
 )
 
 type SshTunnelInfo struct {
-	Mode         string
-	LocalSocket  string
-	RemoteSocket string
-	Public       bool
+	Mode           string
+	LocalSocket    string
+	DirectRemoteIp string
+	RemoteSocket   string
+	Public         bool
 }
 
 func (ti *SshTunnelInfo) LocalBoundToIp() string {
+	if ti.Mode == "direct" {
+		return fmt.Sprintf("%s:%s", ti.DirectRemoteIp, ti.RemoteSocket)
+	}
 	if ti.Mode == "unix" {
 		return ti.LocalSocket
 	}
@@ -29,8 +33,9 @@ func (ti *SshTunnelInfo) RemoteBoundToIp() string {
 		return ti.RemoteSocket
 	}
 
-	ip := "localhost"
-	if ti.Public {
+	// NOTE: `localhost` causes error on Windows server
+	ip := "127.0.0.1"
+	if ti.Public || ti.DirectRemoteIp != "" {
 		ip = "0.0.0.0"
 	}
 
@@ -47,4 +52,10 @@ func (ti *SshTunnelInfo) SwitchToSockets(localSocket string, remoteSocket string
 	ti.Mode = "unix"
 	ti.LocalSocket = localSocket
 	ti.RemoteSocket = remoteSocket
+}
+
+func (ti *SshTunnelInfo) SwitchToDirect(remoteIp string, remotePort int) {
+	ti.Mode = "direct"
+	ti.DirectRemoteIp = remoteIp
+	ti.RemoteSocket = fmt.Sprintf("%d", remotePort)
 }

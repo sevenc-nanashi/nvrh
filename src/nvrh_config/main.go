@@ -18,6 +18,7 @@ type NvrhConfigServer struct {
 	SshPath     string   `yaml:"ssh-path,omitempty"`
 	LocalEditor []string `yaml:"local-editor,omitempty"`
 	ServerEnv   []string `yaml:"server-env,omitempty"`
+	DirectIp    string   `yaml:"direct-ip,omitempty"`
 }
 
 type NvrhConfig struct {
@@ -60,6 +61,7 @@ var envIndex = map[string][]string{
 	"ssh-path":     {"NVRH_CLIENT_SSH_PATH"},
 	"local-editor": {"NVRH_CLIENT_LOCAL_EDITOR"},
 	"server-env":   {"NVRH_CLIENT_SERVER_ENV"},
+	"direct-ip":    {"NVRH_CLIENT_DIRECT_IP"},
 }
 
 type shouldSetFunc func(name string) bool
@@ -145,6 +147,12 @@ func applyServerConfig(c *cli.Command, serverConfig NvrhConfigServer, shouldSet 
 			}
 		}
 	}
+
+	if !c.IsSet("direct-ip") && serverConfig.DirectIp != "" {
+		if err := c.Set("direct-ip", serverConfig.DirectIp); err != nil {
+			return err
+		}
+  }
 
 	return nil
 }
