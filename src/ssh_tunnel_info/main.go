@@ -34,7 +34,7 @@ func (ti *SshTunnelInfo) RemoteBoundToIp() string {
 	}
 
 	ip := "localhost"
-	if ti.Public || ti.DirectRemoteIp != "" {
+	if ti.Public || ti.Mode == "direct" {
 		ip = "0.0.0.0"
 	}
 
