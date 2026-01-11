@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strings"
 	"time"
 
@@ -27,11 +28,14 @@ func WaitForNvim(ctx context.Context, ti *ssh_tunnel_info.SshTunnelInfo) (*nvim.
 
 		case <-ticker.C:
 			nv, err := nvim.Dial(ti.LocalBoundToIp())
+			slog.Debug("Trying to connect to nvim", "address", ti.LocalBoundToIp(), "err", err)
 			if err != nil {
+				slog.Debug("Failed to connect to nvim", "err", err)
 				continue
 			}
 
 			if _, err := nv.APIInfo(); err != nil {
+				slog.Debug("nvim APIInfo not available yet", "err", err)
 				continue
 			}
 

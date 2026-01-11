@@ -33,8 +33,7 @@ func (ti *SshTunnelInfo) RemoteBoundToIp() string {
 		return ti.RemoteSocket
 	}
 
-	// NOTE: `localhost` causes error on Windows server
-	ip := "127.0.0.1"
+	ip := "localhost"
 	if ti.Public || ti.DirectRemoteIp != "" {
 		ip = "0.0.0.0"
 	}
