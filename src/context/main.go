@@ -28,7 +28,7 @@ type NvrhContext struct {
 
 	WindowsLauncherPath string
 
-	DirectIp string
+	DirectConnectIp string
 }
 
 type NvrhServerInfo struct {

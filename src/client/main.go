@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"math/rand/v2"
+	"net"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -112,10 +113,15 @@ var CliClientOpenCommand = cli.Command{
 			Value:   true,
 		},
 
+		&cli.BoolFlag{
+			Name:    "direct-connect",
+			Usage:   "Bypass SSH tunneling and connect directly to the server's IP address [$NVRH_CLIENT_DIRECT_CONNECT]",
+			Sources: cli.EnvVars("NVRH_CLIENT_DIRECT_CONNECT"),
+		},
+
 		&cli.StringFlag{
-			Name:    "direct-ip",
-			Usage:   "IP address to use instead of port forwarding. Useful for servers on the same network or with a VPN [$NVRH_CLIENT_DIRECT_IP]",
-			Sources: cli.EnvVars("NVRH_CLIENT_DIRECT_IP"),
+			Name:  "direct-connect-ip",
+			Usage: "Connect directly to the specified IP address instead of resolving the server's hostname, implies --direct-connect",
 		},
 	},
 
@@ -146,6 +152,20 @@ var CliClientOpenCommand = cli.Command{
 			return err
 		}
 
+		directConnectTarget := ""
+		if cmd.Bool("direct-connect") || cmd.String("direct-connect-ip") != "" {
+			if cmd.String("direct-connect-ip") != "" {
+				directConnectTarget = cmd.String("direct-connect-ip")
+			} else {
+				ips, err := net.LookupIP(endpoint.FinalHost())
+				if err != nil || len(ips) == 0 {
+					return fmt.Errorf("failed to resolve host for direct connection: %w", err)
+				}
+				directConnectTarget = ips[0].String()
+			}
+			slog.Info("Direct connect enabled", "target", directConnectTarget)
+		}
+
 		sessionId := fmt.Sprintf("%d", time.Now().Unix())
 		sshPath := getSshPath(cmd.String("ssh-path"))
 
@@ -168,7 +188,7 @@ var CliClientOpenCommand = cli.Command{
 
 			NvimCmd: cmd.StringSlice("nvim-cmd"),
 
-			DirectIp: cmd.String("direct-ip"),
+			DirectConnectIp: directConnectTarget,
 		}
 
 		remoteEnv := cmd.StringSlice("server-env")
@@ -215,8 +235,8 @@ var CliClientOpenCommand = cli.Command{
 			LocalSocket:  fmt.Sprintf("%d", randomPort),
 			RemoteSocket: fmt.Sprintf("%d", randomPort),
 		}
-		if nvrhContext.DirectIp != "" {
-			siTunnelInfo.SwitchToDirect(nvrhContext.DirectIp, randomPort)
+		if nvrhContext.DirectConnectIp != "" {
+			siTunnelInfo.SwitchToDirect(nvrhContext.DirectConnectIp, randomPort)
 		}
 
 		// Start server info nvim instance.
@@ -264,8 +284,8 @@ var CliClientOpenCommand = cli.Command{
 					RemoteSocket: fmt.Sprintf("%d", remotePortNumber),
 					Public:       false,
 				}
-				if nvrhContext.DirectIp != "" {
-					tunnelInfo.SwitchToDirect(nvrhContext.DirectIp, remotePortNumber)
+				if nvrhContext.DirectConnectIp != "" {
+					tunnelInfo.SwitchToDirect(nvrhContext.DirectConnectIp, remotePortNumber)
 				}
 
 				nvimCmd := nvim_helpers.BuildRemoteCommandString(
@@ -321,8 +341,8 @@ var CliClientOpenCommand = cli.Command{
 		if shouldUsePorts {
 			tunnelInfo.SwitchToPorts(localPortNumber, remotePortNumber)
 		}
-		if nvrhContext.DirectIp != "" {
-			tunnelInfo.SwitchToDirect(nvrhContext.DirectIp, remotePortNumber)
+		if nvrhContext.DirectConnectIp != "" {
+			tunnelInfo.SwitchToDirect(nvrhContext.DirectConnectIp, remotePortNumber)
 		}
 
 		// Start remote nvim
@@ -434,6 +454,17 @@ var CliClientReconnectCommand = cli.Command{
 			Usage: "Additional arguments to pass to the SSH command [$NVRH_CLIENT_SSH_ARG]",
 			// Sources: cli.EnvVars("NVRH_CLIENT_SSH_ARG"),
 		},
+
+		&cli.BoolFlag{
+			Name:    "direct-connect",
+			Usage:   "Bypass SSH tunneling and connect directly to the server's IP address [$NVRH_CLIENT_DIRECT_CONNECT]",
+			Sources: cli.EnvVars("NVRH_CLIENT_DIRECT_CONNECT"),
+		},
+
+		&cli.StringFlag{
+			Name:  "direct-connect-ip",
+			Usage: "Connect directly to the specified IP address instead of resolving the server's hostname, implies --direct-connect",
+		},
 	},
 
 	Action: func(ctx context.Context, cmd *cli.Command) error {
@@ -466,6 +497,20 @@ var CliClientReconnectCommand = cli.Command{
 			return err
 		}
 
+		directConnectTarget := ""
+		if cmd.Bool("direct-connect") || cmd.String("direct-connect-ip") != "" {
+			if cmd.String("direct-connect-ip") != "" {
+				directConnectTarget = cmd.String("direct-connect-ip")
+			} else {
+				ips, err := net.LookupIP(endpoint.FinalHost())
+				if err != nil || len(ips) == 0 {
+					return fmt.Errorf("failed to resolve host for direct connection: %w", err)
+				}
+				directConnectTarget = ips[0].String()
+			}
+			slog.Info("Direct connect enabled", "target", directConnectTarget)
+		}
+
 		sshPath := getSshPath(cmd.String("ssh-path"))
 
 		// Context with cancellation on SIGINT
@@ -488,6 +533,8 @@ var CliClientReconnectCommand = cli.Command{
 			TunneledPorts: make(map[string]bool),
 
 			// NvimCmd: c.StringSlice("nvim-cmd"),
+
+			DirectConnectIp: directConnectTarget,
 		}
 
 		localEditor := cmd.StringSlice("local-editor")
@@ -550,15 +597,17 @@ var CliClientReconnectCommand = cli.Command{
 		if shouldUsePorts {
 			tunnelInfo.SwitchToPorts(localPortNumber, remotePortNumber)
 		}
-		if nvrhContext.DirectIp != "" {
-			tunnelInfo.SwitchToDirect(nvrhContext.DirectIp, remotePortNumber)
+		if nvrhContext.DirectConnectIp != "" {
+			tunnelInfo.SwitchToDirect(nvrhContext.DirectConnectIp, remotePortNumber)
 		}
 
-		go func() {
-			nvrhContext.SshClient.TunnelSocket(tunnelInfo)
-			// TODO needed?
-			stop()
-		}()
+		if nvrhContext.DirectConnectIp == "" {
+			go func() {
+				nvrhContext.SshClient.TunnelSocket(tunnelInfo)
+				// TODO needed?
+				stop()
+			}()
+		}
 
 		// Wait for remote nvim
 		nv, err = nvim_helpers.WaitForNvim(ctx, tunnelInfo)

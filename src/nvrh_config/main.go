@@ -12,13 +12,14 @@ import (
 )
 
 type NvrhConfigServer struct {
-	NvimCmd     []string `yaml:"nvim-cmd,omitempty"`
-	UsePorts    *bool    `yaml:"use-ports,omitempty"`
-	SshArg      []string `yaml:"ssh-arg,omitempty"`
-	SshPath     string   `yaml:"ssh-path,omitempty"`
-	LocalEditor []string `yaml:"local-editor,omitempty"`
-	ServerEnv   []string `yaml:"server-env,omitempty"`
-	DirectIp    string   `yaml:"direct-ip,omitempty"`
+	NvimCmd         []string `yaml:"nvim-cmd,omitempty"`
+	UsePorts        *bool    `yaml:"use-ports,omitempty"`
+	SshArg          []string `yaml:"ssh-arg,omitempty"`
+	SshPath         string   `yaml:"ssh-path,omitempty"`
+	LocalEditor     []string `yaml:"local-editor,omitempty"`
+	ServerEnv       []string `yaml:"server-env,omitempty"`
+	DirectConnect   bool     `yaml:"direct-connect,omitempty"`
+	DirectConnectIp string   `yaml:"direct-connect-ip,omitempty"`
 }
 
 type NvrhConfig struct {
@@ -55,13 +56,13 @@ func LoadConfig(path string) (*NvrhConfig, error) {
 }
 
 var envIndex = map[string][]string{
-	"nvim-cmd":     {"NVRH_CLIENT_NVIM_CMD"},
-	"use-ports":    {"NVRH_CLIENT_USE_PORTS"},
-	"ssh-arg":      {"NVRH_CLIENT_SSH_ARG"},
-	"ssh-path":     {"NVRH_CLIENT_SSH_PATH"},
-	"local-editor": {"NVRH_CLIENT_LOCAL_EDITOR"},
-	"server-env":   {"NVRH_CLIENT_SERVER_ENV"},
-	"direct-ip":    {"NVRH_CLIENT_DIRECT_IP"},
+	"nvim-cmd":       {"NVRH_CLIENT_NVIM_CMD"},
+	"use-ports":      {"NVRH_CLIENT_USE_PORTS"},
+	"ssh-arg":        {"NVRH_CLIENT_SSH_ARG"},
+	"ssh-path":       {"NVRH_CLIENT_SSH_PATH"},
+	"local-editor":   {"NVRH_CLIENT_LOCAL_EDITOR"},
+	"server-env":     {"NVRH_CLIENT_SERVER_ENV"},
+	"direct-connect": {"NVRH_CLIENT_DIRECT_CONNECT"},
 }
 
 type shouldSetFunc func(name string) bool
@@ -148,11 +149,11 @@ func applyServerConfig(c *cli.Command, serverConfig NvrhConfigServer, shouldSet 
 		}
 	}
 
-	if !c.IsSet("direct-ip") && serverConfig.DirectIp != "" {
-		if err := c.Set("direct-ip", serverConfig.DirectIp); err != nil {
+	if shouldSet("direct-connect") && serverConfig.DirectConnect != "" {
+		if err := c.Set("direct-connect", serverConfig.DirectConnect); err != nil {
 			return err
 		}
-  }
+	}
 
 	return nil
 }
